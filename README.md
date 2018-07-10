@@ -12,7 +12,6 @@ KETCube Tools are simple yet powerful pieces of code serving for KETCube evaluat
 or application tests or as a starting point when running more complex application
 
 ## List of KETCube Tools
-* (https://github.com/SmartCAMPUSZCU/KETCube-docs/blob/master/appNotes/KETCube_appNote_003.pdf)
 * [LoRa downlink test](https://github.com/SmartCAMPUSZCU/KETCube-tools/blob/master/LoRa/ketCube_LoRaDownlink.py)
   * allows to test KETCube LoRa downlink
 * [RxDisplay visualization tool](https://github.com/SmartCAMPUSZCU/KETCube-tools/blob/master/vizualize/ketCube_RxDisplayPlot.py)
