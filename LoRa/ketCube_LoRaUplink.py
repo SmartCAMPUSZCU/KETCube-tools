@@ -2,12 +2,12 @@
 # -*- coding: utf-8 -*-
 #
 
-## @file ketCube_LoRaDownlink.py
+## @file ketCube_LoRaUplink.py
 #
 # @author Jan Belohoubek
 # @version 0.1
-# @date    2018-05-07
-# @brief   The KETCube downlink test script
+# @date    2018-08-12
+# @brief   The KETCube uplink test script
 #
 # @note This script works with loraserver.io network server
 # @note Requirements:
@@ -50,16 +50,12 @@
 #  TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE 
 #  OR THE USE OR OTHER DEALINGS WITH THE SOFTWARE.
 
-
-
 ### Imports
 import os, urlparse, json, base64
 import paho.mqtt.client as paho
-import binascii
-import errno
 import time
-import json
-import base64
+import binascii
+import getpass
 
 ### Settings
 DEBUG = True # Debug True/False
@@ -69,11 +65,7 @@ MQTT_USER="belohoubketzcucz"
 MQTT_PASSWD="***"
 MQTT_PORT="1883"
 MQTT_TIMEOUT=30.0
-MQTT_TX_TOPIC="application/1/node/1122334455667788/tx" # CHANGE NODE ID!
-TX_PORT=11 # KETCube LoRa port for strings
-TX_DATA="HELLO WORLD!"
-TX_PERIOD=10 # period in seconds
-TX_ITER=1    # period in seconds number of iterations
+MQTT_RX_TOPIC="application/1/node/1122334455667788/rx" # CHANGE NODE ID!
 
 MQTT_CONNECTED = False
 
@@ -87,14 +79,15 @@ mqttc = paho.Client()
 
 ### Event callbacks
 def on_connect(mosq, obj, flags, rc):
-    global MQTT_TOPIC
-    global MQTT_QOS
-    global MQTT_CONNECTED
+    global DEBUG, MQTT_RX_TOPIC, MQTT_QOS
 
     print("MQTT OnConnect :: rc: " + str(rc))
-    
+     
     if rc == 0:
         MQTT_CONNECTED = True
+    
+    # Start subscribe, with QoS level 0
+    mqttc.subscribe(MQTT_RX_TOPIC, MQTT_QOS)
 
 def on_disconnect(mosq, obj, rc):
     global mqttc
@@ -110,7 +103,58 @@ def on_disconnect(mosq, obj, rc):
         print ("MQTT OnDisconnect :: MQTT Disconnect() call.")
 
 def on_message(mosq, obj, msg):
-    print("MQTT Message :: msg: " + str(msg))
+    global DEBUG
+
+    try:
+        data = json.loads(msg.payload)
+    except:
+        print("ERROR :: MQTT Message: not a JSON object; parameter \"" + str(msg.payload) + "\" is of type: " + str(type(msg.payload)))
+        return()
+
+    if type(data) is not dict:
+        print("ERROR :: MQTT Message: not a JSON object (conversion to dict failed); parameter \"" + str(data) + "\" is of type: " + str(type(data)))
+        return()
+
+    try:
+        dataASCII = base64.b64decode(data[u'data'])
+    except:
+        print("WARNING :: Malformed data!")
+        dataASCII = "MALFORMED DATA RECEIVED!"
+
+    if DEBUG == True:
+        print("MQTT Message :: data type: " + str(type(data)))
+        print("MQTT Message :: RAW msg: " + str(data))
+        print("MQTT Message :: RAW data: " + str(data[u'data']))
+        print("MQTT Message :: dataASCII: " + dataASCII)
+
+    
+    devEUI = (data[u'devEUI'])
+    fPort = str((data[u'fPort']))
+    rxInfo = (data[u'rxInfo'])
+    data = (data[u'data'])
+    
+    # Receive parameters:
+    bestRssi=-1000
+    bestSNR=0
+    GWMac=""
+    GWName=""
+    for i in range(0, (len(rxInfo))):
+        if int((rxInfo[i])[u'rssi']) > bestRssi:
+            bestRssi = int((rxInfo[i])[u'rssi'])
+            bestSNR = int((rxInfo[i])[u'loRaSNR'])
+            GWMac = str((rxInfo[i])[u'mac'])
+            GWName = str((rxInfo[i])[u'name'])
+
+    GWCount = len(rxInfo)
+
+    rxBytes = bytearray()
+    rxBytes.extend(dataASCII)
+
+    # Print decode and print data
+    # Use the following variables: devEUI, fPort, rxInfo, bestRssi, bestSNR, GWMac, GWName, GWCount, data, dataASCII, rxBytes
+    print("Msg from " + str(devEUI) + ": " + str(data))
+    print "Uint16_t: " + str((rxBytes[1] * 256 + rxBytes[2])/10.0)
+    
 
 def on_publish(mosq, obj, mid):
     print("MQTT Publish :: mid: " + str(mid))
@@ -124,8 +168,8 @@ def on_log(mosq, obj, level, string):
 
 ### Main
 print("")
-print("KETCube downlink test&demo script")
-print("---------------------------------")
+print("KETCube uplink test&demo script")
+print("-------------------------------")
 print("")
 
 print("Here you can replace parameters defined in the script header (dafault values are enclosed in \"[]\"):")
@@ -137,21 +181,7 @@ MQTT_USER=raw_input("Set MQTT user name [" + MQTT_USER + "]:") or str(MQTT_USER)
 TMP_MQTT_PASSWD = getpass.getpass("Set MQTT password [" + MQTT_PASSWD + "]:")
 if TMP_MQTT_PASSWD != "":
     MQTT_PASSWD = TMP_MQTT_PASSWD
-MQTT_TX_TOPIC=raw_input("Set MQTT TX topic [" + MQTT_TX_TOPIC + "]:") or str(MQTT_TX_TOPIC)
-
-TX_DATA = raw_input("Set TX data [" + TX_DATA + "]:") or str(TX_DATA)
-tmp_ITER = raw_input("Set number of identical messages you would like to send (0 == inf) [" + str(TX_ITER) + "]:")
-try:
-    TX_ITER = int(tmp_ITER)
-except:
-    pass
-    
-if TX_ITER != 1:
-    tmp_PERIOD = raw_input("Set period of sending (send TX data every [" + str(TX_PERIOD) + "] seconds):")
-    try:
-        TX_PERIOD = int(tmp_PERIOD)
-    except:
-        pass
+MQTT_RX_TOPIC=raw_input("Set MQTT RX topic [" + MQTT_RX_TOPIC + "]:") or str(MQTT_RX_TOPIC)
 
 # Assign event callbacks
 mqttc.on_message = on_message
@@ -162,10 +192,11 @@ mqttc.on_subscribe = on_subscribe
 if DEBUG == True: 
     mqttc.on_log = on_log
 
-# Connect to MQTT server
+# Pripojeni k MQTT serveru
 try:
   mqttc.username_pw_set(MQTT_USER, MQTT_PASSWD)
-  mqttc.connect(MQTT_SERVER, port=MQTT_PORT, keepalive=MQTT_TIMEOUT)
+  mqttc.connect(MQTT_SERVER, port=MQTT_PORT, keepalive=30.0)
+
 
 except:
   print("FATAL :: Connect to MQTT failed!")
@@ -177,32 +208,11 @@ print("--------------------------")
 print("")
 
 while True:
-    print("Runnig iterration #" + str(TX_ITER) + " ... ")
-    retval = mqttc.loop(timeout=TX_PERIOD)
-    time.sleep(TX_PERIOD + 1)
-    if (MQTT_CONNECTED == False):
+    retval = mqttc.loop(timeout=10.0)
+    if retval != 0:
         try:
-            print("MQTT Reconnect (Not conected!)")
+            print("MQTT Reconnect (Error : " + str(retval) + ")")
             mqttc.reconnect()
-            continue
         except:
-            print("FATAL :: Connection to MQTT server lost! ")
+            print("FATAL :: Connection with MQTT server lost! ")
             break
-
-    data = base64.b64encode(TX_DATA)
-    dataJson = '{"reference": "abcd1234", "confirmed": false, "fPort": "' + str(TX_PORT) + '", "data": "' + str(data) + '"}'
-    mqttc.publish(MQTT_TX_TOPIC, payload=dataJson, qos=MQTT_QOS, retain=False)
-
-    if (TX_ITER == 0):
-        continue
-    elif (TX_ITER == 1):
-        print("")
-        print("Bye!")
-        break
-    else:
-        TX_ITER = TX_ITER - 1
-
-    time.sleep(TX_PERIOD)
-
-print("")
-exit(0)
