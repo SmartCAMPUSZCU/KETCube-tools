@@ -60,6 +60,7 @@ import errno
 import time
 import json
 import base64
+import getpass
 
 ### Settings
 DEBUG = True # Debug True/False
@@ -73,7 +74,7 @@ MQTT_TX_TOPIC="application/1/node/1122334455667788/tx" # CHANGE NODE ID!
 TX_PORT=11 # KETCube LoRa port for strings
 TX_DATA="HELLO WORLD!"
 TX_PERIOD=10 # period in seconds
-TX_ITER=1    # period in seconds number of iterations
+TX_ITER=1    # number of iterations
 
 MQTT_CONNECTED = False
 
@@ -166,6 +167,7 @@ if DEBUG == True:
 try:
   mqttc.username_pw_set(MQTT_USER, MQTT_PASSWD)
   mqttc.connect(MQTT_SERVER, port=MQTT_PORT, keepalive=MQTT_TIMEOUT)
+  retval = mqttc.loop(timeout=TX_PERIOD)
 
 except:
   print("FATAL :: Connect to MQTT failed!")
@@ -179,7 +181,7 @@ print("")
 while True:
     print("Runnig iterration #" + str(TX_ITER) + " ... ")
     retval = mqttc.loop(timeout=TX_PERIOD)
-    time.sleep(TX_PERIOD + 1)
+    time.sleep(TX_PERIOD)
     if (MQTT_CONNECTED == False):
         try:
             print("MQTT Reconnect (Not conected!)")
@@ -190,7 +192,7 @@ while True:
             break
 
     data = base64.b64encode(TX_DATA)
-    dataJson = '{"reference": "abcd1234", "confirmed": false, "fPort": "' + str(TX_PORT) + '", "data": "' + str(data) + '"}'
+    dataJson = '{"reference": "abcd1234", "confirmed": false, "fPort": ' + str(TX_PORT) + ', "data": "' + str(data) + '"}'
     mqttc.publish(MQTT_TX_TOPIC, payload=dataJson, qos=MQTT_QOS, retain=False)
 
     if (TX_ITER == 0):
